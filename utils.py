@@ -2,6 +2,7 @@ import string
 from string import punctuation
 
 from nltk.corpus import stopwords
+import nltk
 
 
 def sent2labels(sent):
@@ -38,6 +39,13 @@ def pre_processa(tokens):
     return [t for t in tokens if t not in punctuation and t not in stop_words]
 
 
+def pos_tag(tokens):
+    ''' '''
+    tagger = ['NNP', 'NNPS', 'NNS']
+    tags = [tag[0] for tag in nltk.pos_tag(tokens) if tag[1] in tagger]
+    return tags
+
+
 def save_file_train(data_filename, data):
 
     with open(data_filename, 'w') as arq:
@@ -64,7 +72,7 @@ def read_data(data_file_path):
 
 
 if __name__ == '__main__':
-    arq = read_data('./data/train.data')
+    arq = read_data('./data/train_clean')
 
-    sent = sent2tokens(arq[1])
-    print(pre_processa(sent))
+    sent = sent2tokens(arq[3])
+    print(pos_tag(sent))

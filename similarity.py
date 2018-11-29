@@ -1,9 +1,12 @@
 import numpy as np
 from gensim.models import Word2Vec
+import gensim
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
-from utils import sent2tokens
+from utils import sent2tokens, pre_processa, pos_tag, read_data
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+
+from scipy.sparse import csc_matrix
 
 
 class Sent2Vec:
@@ -14,7 +17,9 @@ class Sent2Vec:
         self.sentences = sentences if sentences else []
 
         if model_pre:
-            self.model = model_pre
+            self.model = gensim.models.KeyedVectors.load_word2vec_format(model_pre, binary=True)
+            self.vectors = self.model.wv
+            self._docs2vec()
         else:
             self.model = Word2Vec(sentences, *args, **kwargs)
 
@@ -42,6 +47,7 @@ class Sent2Vec:
             sentences, total_examples=self.model.corpus_count,
             epochs=self.model.iter
         )
+        import pdb;pdb.set_trace()
         self.vectors = self.model.wv
 
         # Calcula vectors para sentenças
@@ -49,50 +55,24 @@ class Sent2Vec:
 
     def _docs2vec(self):
         self.matrix = [self.sent2vec(sent) for sent in self.sentences]
-
-        return np.array(self.matrix)
+        self.matrix = [m for m in self.matrix if len(m)  > 10]
+        return csc_matrix(self.matrix)
 
     def sent2vec(self, sentence):
         ''' '''
         vec = [self.vectors[s] for s in sentence if s in self.vectors]
 
         # Soma todos vector de uma sentença
-        return np.sum(vec, axis=0)
+        return np.sum(vec, axis=0) if len(vec) > 0 else []
 
-    def distance(self, sentence_token):
+    def eval(self, sentence_token):
         ''' Cosine '''
-        return cosine_similarity([self.sent2vec(sentence_token)], self.matrix)
 
-
-class Document2Vec:
-    ''' Document2Vec'''
-
-    max_epochs = 100
-    vec_size = 100
-    alpha = 0.025
-
-    def __init__(self, documents=None, *args, **kwargs):
-
-        self.tagged_data = [
-            TaggedDocument(words=sent2tokens(_d, lower=True), tags=[str(i)])
-            for i, _d in enumerate(documents)
-        ]
-
-        self.model = Doc2Vec(
-            vector_size=self.vec_size, alpha=self.alpha, min_alpha=0.00025,
-            min_count=1, dm=1, *args, **kwargs
-        )
-
-        self.model.build_vocab(self.tagged_data)
-
-        self.model.train(
-            self.tagged_data, total_examples=self.model.corpus_count,
-            epochs=self.model.iter
-        )
-
-    def get_vector(self, sent):
-        ''''''
-        self.model.docvecs.infer_vector(sent)
+        tokens = self.sent2vec(sentence_token)
+        if len(tokens) == 0:
+            return 1
+        sm_cosine = cosine_similarity([tokens], self.matrix)[0]
+        return max(sm_cosine)
 
 
 class Tfidf:
@@ -110,9 +90,32 @@ class Tfidf:
     def train(self, documents):
         self.X = self.vectorizer.fit_transform(documents)
 
-    def eval(self, document, lim_informative):
+    def eval(self, document):
         y = self.vectorizer.transform([document])
-
         sm_cosine = cosine_similarity(y, self.X)[0]
 
         return max(sm_cosine)
+
+
+if __name__ == '__main__':
+
+    # train = read_data('./data/train_clean')
+    # X_train = [sent2tokens(xseq) for xseq in train]
+
+    # model = './embeddings/GoogleNews-vectors-negative300.bin.gz'
+
+    # m = Sent2Vec(
+    #     model_pre=model, sentences=X_train
+    # )
+    
+    # sent = 'I odie coding Microsoft'.split()
+
+    # distance = m.eval(pos_tag(sent))
+    
+    s1 = 'The car is driven on the road'.split() 
+    s2 = 'The truck is driven on the highway'.split()
+
+    m = Tfidf()
+    m.train([s1, s2])
+
+    print(m.eval(s1))
